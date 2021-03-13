@@ -9,6 +9,10 @@ export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 export { PRELOADED_PROPOSALS } from './proposals'
 
+// a single token by chain
+type ChainToken = {
+  readonly [chainId in ChainId]: Token
+}
 // a list of tokens by chain
 type ChainTokenList = {
   readonly [chainId in ChainId]: Token[]
@@ -32,7 +36,7 @@ export const GOVERNANCE_ADDRESS = '0x5e4be8Bc9637f0EAA1A755019e06A68ce081D58F'
 export const TIMELOCK_ADDRESS = '0x1a9C8182C09F50C8318d769245beA52c32BE35BC'
 
 const UNI_ADDRESS = '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984'
-export const UNI: { [chainId in ChainId]: Token } = {
+export const UNI: ChainToken = {
   [ChainId.MAINNET]: new Token(ChainId.MAINNET, UNI_ADDRESS, 18, 'UNI', 'Uniswap'),
   [ChainId.RINKEBY]: new Token(ChainId.RINKEBY, UNI_ADDRESS, 18, 'UNI', 'Uniswap'),
   [ChainId.ROPSTEN]: new Token(ChainId.ROPSTEN, UNI_ADDRESS, 18, 'UNI', 'Uniswap'),
@@ -60,10 +64,10 @@ const WETH_ONLY: ChainTokenList = {
 }
 
 // used to construct intermediary pairs for trading
-export const BASES_TO_CHECK_TRADES_AGAINST: ChainTokenList = {
-  ...WETH_ONLY,
-  [ChainId.MAINNET]: [...WETH_ONLY[ChainId.MAINNET], DAI, USDC, USDT, COMP, MKR, WBTC]
-}
+export const BASES_TO_CHECK_TRADES_AGAINST: ChainTokenList = mergeChainTokenListWithWETH([
+  UNI,
+  {[ChainId.MAINNET]: [DAI, USDC, USDT, COMP, MKR, WBTC]}
+])
 
 /**
  * Some tokens can only be swapped via certain pairs, so we override the list of bases that are considered for these
@@ -76,16 +80,16 @@ export const CUSTOM_BASES: { [chainId in ChainId]?: { [tokenAddress: string]: To
 }
 
 // used for display in the default list when adding liquidity
-export const SUGGESTED_BASES: ChainTokenList = {
-  ...WETH_ONLY,
-  [ChainId.MAINNET]: [...WETH_ONLY[ChainId.MAINNET], DAI, USDC, USDT, WBTC]
-}
+export const SUGGESTED_BASES: ChainTokenList = mergeChainTokenListWithWETH([
+  UNI,
+  {[ChainId.MAINNET]: [DAI, USDC, USDT, WBTC]}
+])
 
 // used to construct the list of all pairs we consider by default in the frontend
-export const BASES_TO_TRACK_LIQUIDITY_FOR: ChainTokenList = {
-  ...WETH_ONLY,
-  [ChainId.MAINNET]: [...WETH_ONLY[ChainId.MAINNET], DAI, USDC, USDT, WBTC]
-}
+export const BASES_TO_TRACK_LIQUIDITY_FOR: ChainTokenList = mergeChainTokenListWithWETH([
+  UNI,
+  {[ChainId.MAINNET]: [DAI, USDC, USDT, WBTC]}
+])
 
 export const PINNED_PAIRS: { readonly [chainId in ChainId]?: [Token, Token][] } = {
   [ChainId.MAINNET]: [
@@ -213,3 +217,24 @@ export const BLOCKED_ADDRESSES: string[] = [
   '0xA7e5d5A720f06526557c513402f2e6B5fA20b008',
   '0x8576aCC5C05D6Ce88f4e49bf65BdF0C62F91353C'
 ]
+
+function mergeChainTokenListWithWETH(input: readonly { readonly [chainId in ChainId]?: Token | Token[]}[]): ChainTokenList {
+  type writableChainTokenList = { [chainId in ChainId]: Token[] }
+  let r: writableChainTokenList = {...WETH_ONLY}
+
+  for (const map of input) {
+    // Hardcoding value while waiting for: https://github.com/microsoft/TypeScript/issues/42457
+    for (const chain of [
+      ChainId.MAINNET,
+      ChainId.ROPSTEN,
+      ChainId.RINKEBY,
+      ChainId.GÖRLI,
+      ChainId.KOVAN
+    ]) {
+      const element: Token | Token[] | undefined = map[chain]
+      if (typeof element !== undefined)
+        r[chain] = r[chain].concat(Array.isArray(element) ? element as Token[] : [element as Token])
+    }
+  }
+  return r as ChainTokenList
+}
